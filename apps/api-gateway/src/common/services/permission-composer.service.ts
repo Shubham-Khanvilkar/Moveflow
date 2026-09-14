@@ -118,7 +118,7 @@ export class PermissionComposerService {
     const overrides = await this.prisma.userAccessOverride.findMany({
       where: { userId, User: { companyId } },
     });
-    const overrideMap = new Map(overrides.map(o => [o.permissionKey, o.isGranted]));
+    const overrideMap = new Map<string, boolean>(overrides.map((o: any) => [o.permissionKey as string, o.isGranted as boolean]));
 
     // 6. Build permission chain: Role → Company Scope → Site Scope → Process Scope → Override
     const permissionMap = new Map<string, PermissionResolution>();

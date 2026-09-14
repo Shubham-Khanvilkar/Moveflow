@@ -103,7 +103,7 @@ export class ScheduledTasksService {
    * For trips with departureMode='WAIT_ALL', check if:
    * 1. All passengers have boarded → depart immediately
    * 2. Wait timeout has expired → depart with available passengers, mark rest as NO_SHOW
-   * Should be called every 1-2 minutes via @Cron('*/2 * * * *').
+   * Should be called every 1-2 minutes via cron (every 2 minutes).
    */
   async processWaitAllDepartures(): Promise<{ departed: number; errors: number }> {
     const now = new Date();

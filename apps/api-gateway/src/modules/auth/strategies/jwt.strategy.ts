@@ -112,7 +112,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       const overrides = await this.prisma.userAccessOverride.findMany({
         where: { userId, User: { companyId: membership.companyId } },
       });
-      const overrideMap = new Map(overrides.map(o => [o.permissionKey, o.isGranted]));
+      const overrideMap = new Map<string, boolean>(overrides.map((o: any) => [o.permissionKey as string, o.isGranted as boolean]));
       for (const [key, granted] of overrideMap) {
         if (granted) {
           if (!permissions.includes(key)) permissions.push(key);

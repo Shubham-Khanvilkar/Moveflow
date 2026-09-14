@@ -852,10 +852,10 @@ export class PlatformAdminService {
     });
     const userIds = [...new Set(assignments.map(a => a.userId))];
     const users = await this.prisma.user.findMany({ where: { id: { in: userIds } } });
-    const roleById = new Map(roles.map(r => [r.id, r]));
+    const roleById = new Map<string, any>(roles.map(r => [r.id, r]));
     const data = users.map(u => {
       const a = assignments.find(x => x.userId === u.id);
-      const role = a ? roleById.get(a.roleId) : null;
+      const role: any = a ? roleById.get(a.roleId) : null;
       return {
         id: u.id,
         name: u.name,

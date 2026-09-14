@@ -95,7 +95,7 @@ export class PermissionComposerService {
     const overrides = await this.prisma.userAccessOverride.findMany({
       where: { userId, User: { companyId } },
     });
-    const overrideMap = new Map(overrides.map(o => [o.permissionKey, o.isGranted]));
+    const overrideMap = new Map<string, boolean>(overrides.map((o: any) => [o.permissionKey as string, o.isGranted as boolean]));
 
     // 6. Collect role-level permissions (hierarchy=4)
     const rolePermMap = new Map<string, ResolvedPermission>();
