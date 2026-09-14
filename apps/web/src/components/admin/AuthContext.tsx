@@ -1,7 +1,6 @@
 'use client';
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { API_URL } from '../../lib/config';
 
 // ─── Types ─────────────────────────────────────────────────
 export interface Portal {

@@ -70,8 +70,7 @@ import VehicleTypePage from '../components/pages/VehicleTypePage';
 import EmployeeAddressesPage from '../components/pages/EmployeeAddressesPage';
 import EmployeeSchedulingPage from '../components/pages/EmployeeSchedulingPage';
 import ImportExportPage from '../components/pages/ImportExportPage';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { API_URL } from '../lib/config';
 
 // ─── Login Screen ──────────────────────────────────────────
 function LoginScreen() {
