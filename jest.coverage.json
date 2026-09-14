@@ -1,0 +1,54 @@
+{
+  "coverageThreshold": {
+    "global": {
+      "statements": 40,
+      "branches": 35,
+      "functions": 40,
+      "lines": 40
+    },
+    "apps/api-gateway/src/modules/booking/**": {
+      "statements": 50,
+      "branches": 45,
+      "functions": 50,
+      "lines": 50
+    },
+    "apps/api-gateway/src/modules/trips/**": {
+      "statements": 50,
+      "branches": 45,
+      "functions": 50,
+      "lines": 50
+    },
+    "apps/api-gateway/src/modules/auth/**": {
+      "statements": 60,
+      "branches": 55,
+      "functions": 60,
+      "lines": 60
+    },
+    "apps/api-gateway/src/modules/billing/**": {
+      "statements": 45,
+      "branches": 40,
+      "functions": 45,
+      "lines": 45
+    },
+    "apps/api-gateway/src/common/guards/**": {
+      "statements": 70,
+      "branches": 65,
+      "functions": 70,
+      "lines": 70
+    }
+  },
+  "coverageReporters": ["text", "text-summary", "lcov", "clover"],
+  "collectCoverageFrom": [
+    "apps/api-gateway/src/**/*.ts",
+    "!apps/api-gateway/src/**/*.module.ts",
+    "!apps/api-gateway/src/**/dto/**",
+    "!apps/api-gateway/src/**/entities/**",
+    "!apps/api-gateway/src/main.ts"
+  ],
+  "coverageDirectory": "./coverage",
+  "coveragePathIgnorePatterns": [
+    "/node_modules/",
+    "/dist/",
+    "/test/"
+  ]
+}

@@ -1,0 +1,13 @@
+apiVersion: v2
+name: api-gateway
+description: NAVIRA API Gateway Helm Chart
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - navira
+  - api-gateway
+  - nestjs
+maintainers:
+  - name: NAVIRA Team
+    email: platform@navira.io

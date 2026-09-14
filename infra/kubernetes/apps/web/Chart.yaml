@@ -1,0 +1,13 @@
+apiVersion: v2
+name: web-frontend
+description: NAVIRA Web Frontend Helm Chart
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - navira
+  - web-frontend
+  - nextjs
+maintainers:
+  - name: NAVIRA Team
+    email: platform@navira.io

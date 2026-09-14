@@ -1,0 +1,3 @@
+npm notice run moveflow@1.0.0 npx
+npm notice run tsc --noEmit
+src/modules/auth/auth.controller.ts(408,1): error TS1005: '}' expected.

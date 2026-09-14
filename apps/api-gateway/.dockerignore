@@ -1,0 +1,14 @@
+node_modules
+dist
+build
+.git
+.env
+.env.local
+.env.*.local
+*.log
+coverage
+.nyc_output
+.vscode
+.idea
+*.swp
+*.swo

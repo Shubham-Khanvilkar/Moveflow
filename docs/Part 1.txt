@@ -1,0 +1,660 @@
+STOP CLAIMING PRODUCTION READINESS.
+
+MOVE-IN-SYNC IS CURRENTLY NOT PRODUCTION READY.
+
+We are preparing the system for production UAT, and the current build has critical functional gaps.
+
+V7 remains the SINGLE SOURCE OF TRUTH.
+
+DO NOT:
+- create another architecture;
+- rewrite working modules unnecessarily;
+- create more static dashboards;
+- use fake data;
+- use frontend-only role checks;
+- mark pages COMPLETE because they render;
+- mark a role COMPLETE because its name exists;
+- mark a feature COMPLETE because an endpoint exists.
+
+FIRST AUDIT THE CURRENT REPOSITORY AND CURRENT RUNNING APPLICATION.
+
+CREATE A REAL IMPLEMENTATION STATUS MATRIX:
+
+FEATURE
+REQUIRED BY V7
+DATABASE
+BACKEND
+API
+FRONTEND
+AUTHORIZATION
+SCOPE
+AUDIT
+TEST
+CURRENT STATUS
+BLOCKER
+
+Use only:
+NOT IMPLEMENTED
+PARTIAL
+IMPLEMENTED
+TESTED
+VERIFIED
+
+Do not use vague "DONE".
+
+==================================================
+P0 — COMPANY / TENANT CREATION
+==================================================
+
+Company management must work end-to-end.
+
+SUPERADMIN / authorized platform admin must be able to:
+
+Create Company
+Edit Company
+Activate Company
+Suspend Company
+Reactivate Company
+Configure subscription/plan
+Configure company settings
+
+Then company configuration must support:
+
+Company
+→ Region
+→ Site
+→ LOB
+→ Process
+→ Department
+→ Business Unit
+→ Cost Centre
+→ Project
+→ Shift
+
+All master records must persist in PostgreSQL.
+
+No fake company data.
+
+No client-supplied companyId may override server tenant context.
+
+==================================================
+P0 — USER / PROFILE CREATION
+==================================================
+
+The current inability to create company profiles is a RELEASE BLOCKER.
+
+Implement actual profile creation.
+
+Required workflow:
+
+Identity
+→ User Type
+→ Authority Domain
+→ Company
+→ Site
+→ LOB
+→ Process
+→ Shift
+→ Role
+→ Permissions
+→ Scope
+→ Reporting Hierarchy
+→ Data Visibility
+→ Delegatable Permissions
+→ Approval Authority
+→ MFA
+→ Device Requirements
+→ Effective Dates
+→ Review
+→ Access Preview
+→ Create
+
+The Create action must persist real records.
+
+After creation the user must be able to authenticate and receive the correct portal.
+
+Implement:
+
+GET /admin/users
+POST /admin/users
+GET /admin/users/:id
+PATCH /admin/users/:id
+GET /admin/users/:id/effective-access
+POST /admin/users/:id/access-preview
+POST /admin/users/:id/delegate
+POST /admin/users/:id/suspend
+POST /admin/users/:id/reactivate
+
+Adapt route names if the current architecture already has equivalent endpoints.
+
+DO NOT create duplicate models unnecessarily.
+
+==================================================
+P0 — AUTHORITY DOMAINS
+==================================================
+
+Roles must be separated into THREE authority domains.
+
+1. PLATFORM INTERNAL
+
+SUPERADMIN
+MOVE_IN_ADMIN
+FINANCE_TEAM
+PROJECT_MANAGER
+PROJECT_COORDINATOR
+PLATFORM_COMPLIANCE
+SECURITY_ADMINISTRATOR
+SUPPORT_ENGINEER
+PLATFORM_AUDITOR
+
+2. CUSTOMER / COMPANY
+
+TRANSPORT_ADMIN
+TRANSPORT_SUB_ADMIN
+TRANSPORT_COORDINATOR
+TRANSPORT_COMPLIANCE
+DIRECTOR
+SENIOR_MANAGER
+MANAGER
+ASSISTANT_MANAGER
+TEAM_LEADER
+EMPLOYEE
+TRAINER
+
+3. PARTNER
+
+VENDOR_ADMIN
+VENDOR_DISPATCHER
+DRIVER
+GUARD
+
+There must be NO implicit inheritance across authority domains.
+
+TRANSPORT_ADMIN is NOT SUPERADMIN.
+
+COMPANY_ADMIN must NOT silently become SUPERADMIN.
+
+MANAGER is NOT TRANSPORT_ADMIN.
+
+FINANCE is NOT DISPATCH.
+
+COMPLIANCE is NOT GENERAL ADMIN.
+
+SUPPORT is NOT unrestricted customer admin.
+
+VENDOR_ADMIN cannot administer the customer company.
+
+DRIVER cannot view other drivers' unrestricted data.
+
+==================================================
+P0 — REAL RBAC
+==================================================
+
+Implement central authorization:
+
+Identity
++
+Authority Domain
++
+Role
++
+Permission
++
+Tenant
++
+Scope
++
+Hierarchy where applicable
++
+Policy
++
+Data Classification
++
+Resource
++
+Action
+
+Complete:
+
+AccessScopeGuard
+Effective Access
+Access Preview
+Permission resolution
+Scope resolution
+Role assignment
+PlatformRoleAssignment
+Temporary/effective dated access
+Delegation
+Revocation
+Authorization audit
+Scope violation audit
+
+Never rely on:
+
+if (user.role === "ADMIN")
+
+as the complete authorization model.
+
+==================================================
+P0 — DELEGATED ADMIN CREATION
+==================================================
+
+Transport Admin must be able to create additional administrators only when authorized.
+
+Enforce:
+
+New Admin Scope ⊆ Creator Scope
+
+AND
+
+New Admin Permissions ⊆ Creator Delegatable Permissions
+
+Transport Sub-Admin cannot expand their own authority.
+
+Coordinator cannot create unrestricted admins without explicit delegation authority.
+
+Access Preview must run BEFORE creation.
+
+==================================================
+P0 — ACCESS PREVIEW
+==================================================
+
+Implement a REAL authorization calculation.
+
+Display:
+
+Role
+Authority Domain
+Permissions
+Company
+Regions
+Sites
+LOBs
+Processes
+Departments
+Business Units
+Cost Centres
+Projects
+Shifts
+Reporting Hierarchy
+Approval Authority
+Delegatable Permissions
+Data Classifications
+Allowed Actions
+Denied Actions
+Effective Employees
+Effective Headcount
+Effective Drivers
+Effective Vehicles
+Effective Trips
+Effective Vendors
+Effective Financial Records
+Effective GPS Visibility
+
+Show WHY an important action is allowed or denied.
+
+==================================================
+P1 — ROLE-SPECIFIC PORTALS
+==================================================
+
+The current universal navigation must be removed.
+
+A logged-in user must receive only their authorized workspace.
+
+PLATFORM:
+/platform/*
+
+TRANSPORT:
+/transport/*
+
+OPERATIONS:
+/operations/*
+
+FINANCE:
+/finance/*
+
+MANAGEMENT:
+/manager/*
+
+EMPLOYEE:
+/employee/*
+
+VENDOR:
+/vendor/*
+
+DRIVER:
+/driver/*
+
+GUARD:
+/guard/*
+
+SUPPORT:
+/support/*
+
+COMPLIANCE:
+/compliance/*
+
+SECURITY:
+/security/*
+
+AUDITOR:
+/auditor/*
+
+Do not expose every portal to every user.
+
+==================================================
+P1 — FUNCTIONAL DASHBOARDS
+==================================================
+
+Every dashboard widget must satisfy:
+
+UI
+→ API
+→ authorization
+→ scope
+→ service
+→ database
+→ response
+→ drilldown
+
+No fake KPI.
+
+No Math.random().
+
+No hard-coded activity.
+
+No placeholder "-".
+
+If the API fails:
+show an error.
+
+If there is no data:
+show "No data available in your authorized scope."
+
+==================================================
+P1 — FUNCTIONAL ACTIONS
+==================================================
+
+Every visible action must actually work.
+
+Examples:
+
+Create Company
+Create User
+Create Admin
+Onboard Employee
+Offboard Employee
+Create Booking
+Approve Booking
+Create Schedule
+Create Route
+Assign Vehicle
+Assign Driver
+Reassign Trip
+Move Passenger
+No-Show
+Breakdown
+Replacement
+SOS
+Create Vendor
+Create Rate Card
+Approve Expense
+Export Report
+
+A modal that only updates React state is NOT implementation.
+
+Mutation must:
+
+authorize
+validate
+persist
+audit
+publish events where required
+return authoritative state
+refresh UI
+
+==================================================
+P1 — COMPANY PROFILE TEST
+==================================================
+
+Perform this exact test:
+
+Create Company:
+ACME TEST
+
+Create:
+
+Site:
+PUN01
+
+LOB:
+BPO
+
+Processes:
+VOICE01
+CHAT01
+
+Shifts:
+DAY
+NIGHT
+
+Then create:
+
+Transport Admin
+Transport Sub-Admin
+Transport Coordinator
+Director
+Manager
+Employee
+
+Assign different scopes.
+
+Then authenticate as every profile.
+
+Verify resulting portal and data.
+
+==================================================
+P1 — ROLE TEST PROFILES
+==================================================
+
+Create non-production/UAT identities for:
+
+SUPERADMIN
+MOVE_IN_ADMIN
+FINANCE_TEAM
+PROJECT_MANAGER
+PROJECT_COORDINATOR
+PLATFORM_COMPLIANCE
+SECURITY_ADMINISTRATOR
+SUPPORT_ENGINEER
+PLATFORM_AUDITOR
+
+TRANSPORT_ADMIN
+TRANSPORT_SUB_ADMIN
+TRANSPORT_COORDINATOR
+TRANSPORT_COMPLIANCE
+DIRECTOR
+SENIOR_MANAGER
+MANAGER
+ASSISTANT_MANAGER
+TEAM_LEADER
+EMPLOYEE
+TRAINER
+
+VENDOR_ADMIN
+VENDOR_DISPATCHER
+DRIVER
+GUARD
+
+Each must have deliberately different permissions and scopes.
+
+==================================================
+P2 — SECURITY TESTS
+==================================================
+
+Test forged:
+
+companyId
+siteId
+processId
+shiftId
+employeeId
+driverId
+vehicleId
+tripId
+vendorId
+role
+permission
+scope
+
+Test:
+
+cross-company
+cross-site
+cross-process
+cross-hierarchy
+cross-vendor
+unauthorized GPS
+unauthorized finance
+unauthorized export
+unauthorized admin creation
+direct URL bypass
+
+Expected:
+401 / 403 / appropriate secure denial.
+
+==================================================
+P2 — DASHBOARD E2E
+==================================================
+
+For EACH role verify:
+
+Login
+Portal
+Sidebar
+Dashboard
+Real API
+Real DB
+Scope
+Drilldown
+Allowed actions
+Denied actions
+Export rules
+Audit
+Logout
+
+Do not declare the dashboard verified unless this test passes.
+
+==================================================
+P3 — CORE TRANSPORT PRODUCTION FLOW
+==================================================
+
+Test end-to-end:
+
+Company
+→ Site
+→ Process
+→ Shift
+→ Employee
+→ Transport Eligibility
+→ Booking
+→ Approval
+→ Schedule
+→ Dispatch
+→ Driver Accept
+→ Vehicle
+→ GPS
+→ Arrival
+→ OTP/QR Boarding
+→ Trip Start
+→ Live Tracking
+→ Completion
+→ Cost
+→ Billing
+→ Audit
+
+Also test:
+
+No-Show
+→ Evidence
+→ Appeal
+→ Escalation
+→ Decision
+
+and:
+
+Breakdown
+→ Replacement
+→ Passenger Transfer
+→ Resume
+
+==================================================
+P4 — PRODUCTION QUALITY GATES
+==================================================
+
+Before declaring PRODUCTION READY:
+
+Real PostgreSQL
+Real migrations
+No demo-mode fallback
+No mock production services
+Complete RBAC
+Complete scope enforcement
+Tenant isolation tests
+Real dashboard data
+Real mobile flows
+GPS
+Notifications
+Billing
+Privacy
+GPS consent
+Retention
+Legal hold
+Security scan
+Penetration test
+Backup
+Restore test
+PITR
+DR test
+Load test
+CI/CD
+Monitoring
+Alerting
+E2E
+UAT
+Tax/legal review
+Privacy review
+
+==================================================
+FINAL REQUIREMENT
+==================================================
+
+DO NOT REPORT:
+
+"Production ready"
+
+until all mandatory gates pass.
+
+Instead provide:
+
+PRODUCTION READINESS REPORT
+
+P0 BLOCKERS
+P1 BLOCKERS
+P2 BLOCKERS
+IMPLEMENTED
+TESTED
+VERIFIED
+FAILED
+NOT IMPLEMENTED
+
+Include evidence:
+file
+route
+API
+database model
+test
+command output
+
+We are preparing for a real production test.
+Treat any fake, placeholder, disconnected or frontend-only functionality as NOT IMPLEMENTED.

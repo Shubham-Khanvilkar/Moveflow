@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+*.log
+dist
+.next
+.turbo
+coverage
+test_output.txt
+*.md
+docs/

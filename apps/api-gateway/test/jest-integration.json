@@ -1,0 +1,11 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "../src",
+  "testRegex": ".integration-spec.ts$",
+  "transform": { "^.+\\.ts$": "ts-jest" },
+  "testEnvironment": "node",
+  "testTimeout": 60000,
+  "moduleNameMapper": {
+    "^@moveflow/types(.*)$": "<rootDir>/../../../packages/types/src$1"
+  }
+}
