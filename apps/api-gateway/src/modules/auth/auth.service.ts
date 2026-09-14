@@ -116,13 +116,14 @@ export class AuthService {
       );
     }
 
-    // Verify password: Supabase when configured, otherwise local bcrypt
+    // Verify password: try Supabase first, fall back to local bcrypt
     let authenticated = false;
     let session: any = null;
     if (this.supabase) {
       const { data, error } = await this.supabase.auth.signInWithPassword({ email, password });
       if (!error) { authenticated = true; session = data.session; }
-    } else {
+    }
+    if (!authenticated) {
       authenticated = !!user.passwordHash && (await bcrypt.compare(password, user.passwordHash));
     }
 
@@ -187,19 +188,21 @@ export class AuthService {
       );
     }
 
-    // Authenticate: Supabase when configured, otherwise local bcrypt
+    // Authenticate: try Supabase first, fall back to local bcrypt
+    let authenticated = false;
     if (this.supabase) {
       const { error: authError } = await this.supabase.auth.signInWithPassword({ email, password });
-      if (authError) {
-        await this.recordFailedAttempt(user.id);
-        throw new UnauthorizedException('Invalid credentials');
+      if (!authError) {
+        authenticated = true;
       }
-    } else {
+    }
+    if (!authenticated) {
       const ok = !!user.passwordHash && (await bcrypt.compare(password, user.passwordHash));
       if (!ok) {
         await this.recordFailedAttempt(user.id);
         throw new UnauthorizedException('Invalid credentials');
       }
+      authenticated = true;
     }
 
     if (user.status !== 'ACTIVE') throw new UnauthorizedException('Account is not active');
