@@ -28,6 +28,9 @@
     "turbo": "^2.0.0",
     "typescript": "^5.4.0"
   },
+  "overrides": {
+    "@react-native-community/netinfo": "9.5.0"
+  },
   "engines": {
     "node": ">=18"
   },
