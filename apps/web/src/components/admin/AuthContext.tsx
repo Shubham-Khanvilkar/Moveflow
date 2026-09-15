@@ -183,14 +183,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Try Supabase client-side auth first (fast, ~200ms)
       if (isSupabaseConfigured()) {
-        const supabase = getSupabase();
-        if (supabase) {
-          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-          if (error) {
-            console.warn('Supabase auth failed, falling back to API:', error.message);
-          } else if (data.session?.access_token) {
-            accessToken = data.session.access_token;
+        try {
+          const supabase = getSupabase();
+          if (supabase) {
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) {
+              console.warn('Supabase auth failed, falling back to API:', error.message);
+            } else if (data.session?.access_token) {
+              accessToken = data.session.access_token;
+            }
           }
+        } catch (supabaseErr: any) {
+          console.warn('Supabase auth network error, falling back to API:', supabaseErr?.message || supabaseErr);
         }
       }
 
