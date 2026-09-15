@@ -1,6 +1,7 @@
 'use client';
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { API_URL } from '../../lib/config';
+import { getSupabase, isSupabaseConfigured } from '../../lib/supabase';
 
 // ─── Types ─────────────────────────────────────────────────
 export interface Portal {
@@ -178,30 +179,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-      const res = await fetch(`${API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      const data = await res.json();
-      if (!res.ok) {
-        console.error('Login API error:', res.status, data);
-        throw new Error(data.message || data.error || `Login failed (${res.status})`);
+      let accessToken: string | null = null;
+
+      // Try Supabase client-side auth first (fast, ~200ms)
+      if (isSupabaseConfigured()) {
+        const supabase = getSupabase();
+        if (supabase) {
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) {
+            console.warn('Supabase auth failed, falling back to API:', error.message);
+          } else if (data.session?.access_token) {
+            accessToken = data.session.access_token;
+          }
+        }
       }
-      if (data.success && data.data) {
-        const accessToken = data.data.access_token;
-        setToken(accessToken);
-        localStorage.setItem('token', accessToken);
-        // Fetch full user context from /me
-        await fetchMe(accessToken);
-        return true;
+
+      // Fallback to EC2 API login (slow, ~8-11s)
+      if (!accessToken) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const res = await fetch(`${API_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        const data = await res.json();
+        if (!res.ok) {
+          console.error('Login API error:', res.status, data);
+          throw new Error(data.message || data.error || `Login failed (${res.status})`);
+        }
+        if (data.success && data.data) {
+          accessToken = data.data.access_token;
+        } else {
+          console.error('Login unexpected response:', data);
+          return false;
+        }
       }
-      console.error('Login unexpected response:', data);
-      return false;
+
+      setToken(accessToken);
+      localStorage.setItem('token', accessToken);
+      await fetchMe(accessToken);
+      return true;
     } catch (err: any) {
       console.error('Login failed:', err?.message || err);
       throw err;
@@ -219,17 +239,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setNavigation([]);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    // Sign out from Supabase too
+    if (isSupabaseConfigured()) {
+      const supabase = getSupabase();
+      if (supabase) supabase.auth.signOut();
+    }
   }, []);
 
   // Restore session
   useEffect(() => {
-    const savedToken = localStorage.getItem('token');
-    if (savedToken) {
-      setToken(savedToken);
-      fetchMe(savedToken).finally(() => setLoading(false));
-    } else {
+    const restore = async () => {
+      // Try Supabase session first
+      if (isSupabaseConfigured()) {
+        const supabase = getSupabase();
+        if (supabase) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            setToken(session.access_token);
+            localStorage.setItem('token', session.access_token);
+            await fetchMe(session.access_token);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+      // Fallback to localStorage token
+      const savedToken = localStorage.getItem('token');
+      if (savedToken) {
+        setToken(savedToken);
+        await fetchMe(savedToken);
+      }
       setLoading(false);
-    }
+    };
+    restore();
   }, [fetchMe]);
 
   return (
