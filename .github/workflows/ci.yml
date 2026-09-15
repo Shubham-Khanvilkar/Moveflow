@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - run: npm ci --legacy-peer-deps
+      - run: npm install --legacy-peer-deps
       - name: Lint API Gateway
         run: cd apps/api-gateway && npx eslint src/ --max-warnings=3500
       - name: Lint Web Frontend
@@ -41,7 +41,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - run: npm ci --legacy-peer-deps
+      - run: npm install --legacy-peer-deps
       - name: TypeCheck API Gateway
         run: cd apps/api-gateway && npx tsc --noEmit
       - name: TypeCheck Web Frontend
@@ -59,7 +59,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - run: npm ci --legacy-peer-deps
+      - run: npm install --legacy-peer-deps
       - name: Build API Gateway
         run: cd apps/api-gateway && npx nest build
       - name: Upload dist
@@ -77,7 +77,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - run: npm ci --legacy-peer-deps
+      - run: npm install --legacy-peer-deps
       - name: Build Web Frontend
         run: cd apps/web && npx next build
         env:
@@ -126,7 +126,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - run: npm ci --legacy-peer-deps
+      - run: npm install --legacy-peer-deps
       - name: Generate Prisma Client
         run: cd packages/database && npx prisma generate
       - name: Run API Tests
@@ -210,7 +210,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - run: npm ci --legacy-peer-deps
+      - run: npm install --legacy-peer-deps
       - name: Apply production migrations
         run: npx prisma migrate deploy --schema packages/database/prisma/schema.prisma
         env:
@@ -244,7 +244,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - run: npm ci --legacy-peer-deps
+      - run: npm install --legacy-peer-deps
       - name: Apply production migrations
         run: npx prisma migrate deploy --schema packages/database/prisma/schema.prisma
         env:
