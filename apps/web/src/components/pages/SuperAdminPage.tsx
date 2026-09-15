@@ -47,13 +47,17 @@ export default function SuperAdminPage({ token }: { token: string }) {
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/platform/dashboard/kpi`, { headers: { Authorization: `Bearer ${token}` } });
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), 30000);
+      const res = await fetch(`${API_URL}/api/platform/dashboard/kpi`, { headers: { Authorization: `Bearer ${token}` }, signal: c.signal });
+      clearTimeout(t);
       if (!res.ok) throw new Error(`Failed to load stats (${res.status})`);
       const d = await res.json();
       setStats(d.data ?? d);
       setError(null);
     } catch (e: any) {
-      setError(e.message || 'Failed to load platform stats');
+      if (e.name === 'AbortError') setError('Request timed out — please try again');
+      else setError(e.message || 'Failed to load platform stats');
     }
   }, [token]);
 
@@ -69,8 +73,11 @@ export default function SuperAdminPage({ token }: { token: string }) {
     const endpoint = tab === 'companies' ? '/api/platform/companies' : tab === 'users' ? '/api/platform/users' : tab === 'roles' ? '/api/platform/roles' : null;
     if (!endpoint) { setLoading(false); return; }
 
-    fetch(`${API_URL}${endpoint}`, { headers: { Authorization: `Bearer ${token}` } })
+    const c2 = new AbortController();
+    const t2 = setTimeout(() => c2.abort(), 30000);
+    fetch(`${API_URL}${endpoint}`, { headers: { Authorization: `Bearer ${token}` }, signal: c2.signal })
       .then(r => {
+        clearTimeout(t2);
         if (!r.ok) throw new Error(`Request failed (${r.status})`);
         return r.json();
       })
@@ -80,7 +87,7 @@ export default function SuperAdminPage({ token }: { token: string }) {
         else if (tab === 'roles') setRoles(d.data || d || []);
         setError(null);
       })
-      .catch((e: any) => setError(e.message || 'Failed to load data'))
+      .catch((e: any) => { clearTimeout(t2); setError(e.name === 'AbortError' ? 'Request timed out — please try again' : e.message || 'Failed to load data'); })
       .finally(() => setLoading(false));
   }, [tab, token, fetchStats]);
 
@@ -88,7 +95,10 @@ export default function SuperAdminPage({ token }: { token: string }) {
     setCreatingCompany(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/platform/companies`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(newCompany) });
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), 30000);
+      const res = await fetch(`${API_URL}/api/platform/companies`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(newCompany), signal: c.signal });
+      clearTimeout(t);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || `Create failed (${res.status})`);
@@ -100,7 +110,7 @@ export default function SuperAdminPage({ token }: { token: string }) {
         setNewCompany({ name: '', code: '', legalName: '', contactEmail: '', contactPhone: '', country: 'India', city: '' });
       }
     } catch (e: any) {
-      setError(e.message || 'Failed to create company');
+      setError(e.name === 'AbortError' ? 'Request timed out' : e.message || 'Failed to create company');
     } finally {
       setCreatingCompany(false);
     }
@@ -112,7 +122,10 @@ export default function SuperAdminPage({ token }: { token: string }) {
     setSimError(null);
     setSimResult(null);
     try {
-      const res = await fetch(`${API_URL}/api/platform/access-simulator/${encodeURIComponent(simUserId)}`, { headers: { Authorization: `Bearer ${token}` } });
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), 30000);
+      const res = await fetch(`${API_URL}/api/platform/access-simulator/${encodeURIComponent(simUserId)}`, { headers: { Authorization: `Bearer ${token}` }, signal: c.signal });
+      clearTimeout(t);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || `Simulator failed (${res.status})`);
@@ -120,7 +133,7 @@ export default function SuperAdminPage({ token }: { token: string }) {
       const d = await res.json();
       setSimResult(d.data ?? d);
     } catch (e: any) {
-      setSimError(e.message || 'Failed to simulate access');
+      setError(e.name === 'AbortError' ? 'Request timed out' : e.message || 'Failed to simulate access');
     } finally {
       setSimLoading(false);
     }

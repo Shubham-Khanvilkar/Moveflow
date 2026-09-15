@@ -3,7 +3,7 @@
 const configuredApiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
 export const API_BASE_URL = configuredApiUrl.replace(/\/api$/, '') + '/api';
 
-const FETCH_TIMEOUT_MS = 15000;
+const FETCH_TIMEOUT_MS = 30000;
 const MAX_RETRIES = 2;
 
 export class ApiError extends Error {
@@ -61,10 +61,21 @@ export async function apiRequest<T = unknown>(path: string, options: RequestInit
       if (err instanceof ApiError) throw err;
       if (err.name === 'AbortError') {
         if (attempt < MAX_RETRIES) continue;
-        throw new ApiError(0, 'Request timed out. Please check your connection and try again.');
+        throw new ApiError(0, 'Request timed out. The server is taking too long to respond — please try again.');
       }
-      if (attempt < MAX_RETRIES) continue;
-      throw err;
+      // Network errors (Failed to fetch, DNS, CORS)
+      if (err instanceof TypeError && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError') || err.message.includes('network'))) {
+        if (attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        throw new ApiError(0, 'Network error — unable to reach the server. Please check your internet connection and try again.');
+      }
+      if (attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+        continue;
+      }
+      throw new ApiError(0, `Connection failed: ${err.message || 'unknown error'}. Please try again.`);
     }
   }
   throw lastError || new ApiError(0, 'Request failed');

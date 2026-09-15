@@ -168,9 +168,11 @@ function GenericPage({ title, description, token }: { title: string; description
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/dashboard/analytics/summary`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(d => { const raw = d?.data; setData(raw?.data !== undefined ? raw.data : raw ?? d); setLoading(false); })
-      .catch(() => setLoading(false));
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), 30000);
+    fetch(`${API_URL}/api/dashboard/analytics/summary`, { headers: { Authorization: `Bearer ${token}` }, signal: c.signal })
+      .then(r => r.json()).then(d => { clearTimeout(t); const raw = d?.data; setData(raw?.data !== undefined ? raw.data : raw ?? d); setLoading(false); })
+      .catch(() => { clearTimeout(t); setLoading(false); });
   }, [token]);
 
   return (
@@ -343,9 +345,11 @@ function RoleDashboard({ user, navItem, token, onNavigate }: { user: User; navIt
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/dashboard/analytics/summary`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(d => { const raw = d?.data; setData(raw?.data !== undefined ? raw.data : raw ?? d); setLoading(false); })
-      .catch(() => setLoading(false));
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), 30000);
+    fetch(`${API_URL}/api/dashboard/analytics/summary`, { headers: { Authorization: `Bearer ${token}` }, signal: c.signal })
+      .then(r => r.json()).then(d => { clearTimeout(t); const raw = d?.data; setData(raw?.data !== undefined ? raw.data : raw ?? d); setLoading(false); })
+      .catch(() => { clearTimeout(t); setLoading(false); });
   }, [token]);
 
   if (loading) return <div style={{ padding: 24, color: '#6b7280' }}>Loading workspace...</div>;

@@ -43,10 +43,14 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 async function api(path: string, options?: RequestInit) {
   try {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), 30000);
     const res = await fetch(`${API_BASE}${path}`, {
       ...options,
+      signal: c.signal,
       headers: { "Content-Type": "application/json", ...options?.headers },
     });
+    clearTimeout(t);
     if (!res.ok) return null;
     return res.json();
   } catch {

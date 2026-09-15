@@ -76,13 +76,16 @@ export default function AccessPage({ token }: { token: string }) {
   const headers = { Authorization: `Bearer ${token}` };
 
   useEffect(() => {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), 30000);
     Promise.all([
-      fetch(`${API_URL}/api/platform/roles`, { headers }).then(r => r.json()),
-      fetch(`${API_URL}/api/platform/users`, { headers }).then(r => r.json()),
+      fetch(`${API_URL}/api/platform/roles`, { headers, signal: c.signal }).then(r => r.json()),
+      fetch(`${API_URL}/api/platform/users`, { headers, signal: c.signal }).then(r => r.json()),
     ]).then(([rolesRes, usersRes]) => {
+      clearTimeout(t);
       setRoles(Array.isArray(rolesRes) ? rolesRes : rolesRes.data || []);
       setUsers(Array.isArray(usersRes) ? usersRes : usersRes.data?.data || usersRes.data || []);
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch(() => { clearTimeout(t); }).finally(() => setLoading(false));
   }, [token]);
 
   const loadSecurityEvents = useCallback(async () => {
@@ -92,10 +95,13 @@ export default function AccessPage({ token }: { token: string }) {
       if (secFilter.riskLevel) params.set('riskLevel', secFilter.riskLevel);
       if (secFilter.eventCode) params.set('eventCode', secFilter.eventCode);
 
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), 30000);
       const [eventsRes, summaryRes] = await Promise.all([
-        fetch(`${API_URL}/api/platform/security/events?${params}`, { headers }).then(r => r.json()),
-        fetch(`${API_URL}/api/platform/security/summary`, { headers }).then(r => r.json()),
+        fetch(`${API_URL}/api/platform/security/events?${params}`, { headers, signal: c.signal }).then(r => r.json()),
+        fetch(`${API_URL}/api/platform/security/summary`, { headers, signal: c.signal }).then(r => r.json()),
       ]);
+      clearTimeout(t);
 
       setSecEvents(eventsRes.data || []);
       setSecTotal(eventsRes.total || 0);
