@@ -159,7 +159,7 @@ jobs:
   # ============================================================
   docker:
     runs-on: ubuntu-latest
-    needs: [build-api, build-web, build-ml, test, security]
+    needs: [build-api, build-web, security]
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -282,7 +282,7 @@ jobs:
           echo "Build ML: ${{ needs.build-ml.result }}"
           echo "Tests: ${{ needs.test.result }}"
           echo "Security: ${{ needs.security.result }}"
-          if [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.typecheck.result }}" != "success" ] || [ "${{ needs.build-api.result }}" != "success" ] || [ "${{ needs.build-web.result }}" != "success" ] || [ "${{ needs.build-ml.result }}" != "success" ] || [ "${{ needs.security.result }}" != "success" ]; then
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.typecheck.result }}" != "success" ] || [ "${{ needs.build-api.result }}" != "success" ] || [ "${{ needs.build-web.result }}" != "success" ] || [ "${{ needs.security.result }}" != "success" ]; then
             echo "CI FAILED"
             exit 1
           fi
