@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "apps/*",
+    "apps/api-gateway",
+    "apps/web",
+    "apps/ml-service",
     "packages/*"
   ],
   "scripts": {
