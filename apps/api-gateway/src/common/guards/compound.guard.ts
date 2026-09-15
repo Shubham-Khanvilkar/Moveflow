@@ -20,7 +20,7 @@ export class CompoundGuard implements CanActivate {
   private accessScopeGuard: AccessScopeGuard;
 
   constructor(private reflector: Reflector, private prisma: PrismaService) {
-    this.jwtGuard = new JwtAuthGuard();
+    this.jwtGuard = new JwtAuthGuard(null as any);
     this.tenantGuard = new TenantGuard(reflector);
     this.rolesGuard = new RolesGuard(reflector);
     this.permissionsGuard = new PermissionsGuard(reflector);

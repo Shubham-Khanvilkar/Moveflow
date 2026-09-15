@@ -1,8 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma.service';
+import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
 
 /**
  * Legacy-to-canonical role mapping
@@ -44,23 +43,62 @@ function normalizeRoles(roles: string[]): string[] {
 }
 
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy) {
+export class JwtStrategy {
+  private jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+  private hmacSecret: string | null = null;
+
   constructor(
-    configService: ConfigService,
+    private configService: ConfigService,
     private prisma: PrismaService,
   ) {
-    const jwtSecret = configService.get<string>('SUPABASE_JWT_SECRET')
-      || configService.get<string>('JWT_SECRET');
+    const supabaseUrl = configService.get<string>('SUPABASE_URL');
+    if (supabaseUrl) {
+      this.jwks = createRemoteJWKSet(new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`));
+    }
+    this.hmacSecret = configService.get<string>('SUPABASE_JWT_SECRET')
+      || configService.get<string>('JWT_SECRET') || null;
+  }
 
-    if (!jwtSecret) {
-      throw new Error('SUPABASE_JWT_SECRET or JWT_SECRET environment variable is required');
+  async authenticate(token: string): Promise<any> {
+    let payload: JWTPayload;
+
+    // Try JWKS verification first (ES256 - Supabase new format)
+    if (this.jwks) {
+      try {
+        const result = await jwtVerify(token, this.jwks, {
+          issuer: `${this.configService.get<string>('SUPABASE_URL')}/auth/v1`,
+        });
+        payload = result.payload;
+        return this.validate(payload);
+      } catch (err: any) {
+        // JWKS failed, try HMAC fallback
+      }
     }
 
-    super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      ignoreExpiration: false,
-      secretOrKey: jwtSecret,
-    });
+    // Fallback: HMAC verification (legacy HS256)
+    if (this.hmacSecret) {
+      try {
+        const { importSPKI, jwtVerify: jwVerify } = await import('jose');
+        // For HMAC, we need to use a different approach
+        // Use crypto to verify HMAC directly
+        const crypto = await import('crypto');
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const [header, body, sig] = parts;
+          const hmac = crypto.createHmac('sha256', this.hmacSecret);
+          hmac.update(`${header}.${body}`);
+          const expected = hmac.digest('base64url');
+          if (sig === expected) {
+            payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+            return this.validate(payload);
+          }
+        }
+      } catch (err: any) {
+        // HMAC failed too
+      }
+    }
+
+    throw new UnauthorizedException('Invalid or expired token');
   }
 
   async validate(payload: any) {
@@ -76,7 +114,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     try {
-      const user = await this.prisma.user.findUnique({
+      // Try by ID first, then by email (Supabase JWTs have UUID IDs)
+      let user = await this.prisma.user.findUnique({
         where: { id: userId },
         include: {
           memberships: {
@@ -85,6 +124,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           },
         },
       });
+
+      if (!user && email) {
+        user = await this.prisma.user.findUnique({
+          where: { email },
+          include: {
+            memberships: {
+              where: { status: 'ACTIVE' },
+              include: { company: true },
+            },
+          },
+        });
+      }
 
       if (!user || user.status !== 'ACTIVE') {
         throw new UnauthorizedException('User not found or inactive');
@@ -95,22 +146,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         throw new UnauthorizedException('No active company membership');
       }
 
-      // Build roles and permissions from database
-      const { roles, permissions } = await this.buildUserContext(userId, membership.companyId);
+      const { roles, permissions } = await this.buildUserContext(user.id, membership.companyId);
 
-      // Vendor mapping: the vendor is the team leader of a directly-assigned
-      // set of vehicles - no invites; the VendorUser link is the assignment.
       const vendorUser = await this.prisma.vendorUser.findFirst({
-        where: { userId, isActive: true },
+        where: { userId: user.id, isActive: true },
         select: { vendorId: true },
       });
 
-      // Build access scopes from DB — scopes are per-company with expiry
-      const accessScopes = await this.buildAccessScopes(userId, membership.companyId);
+      const accessScopes = await this.buildAccessScopes(user.id, membership.companyId);
 
-      // Apply UserAccessOverrides (permission ON/OFF toggles)
       const overrides = await this.prisma.userAccessOverride.findMany({
-        where: { userId, User: { companyId: membership.companyId } },
+        where: { userId: user.id, User: { companyId: membership.companyId } },
       });
       const overrideMap = new Map<string, boolean>(overrides.map((o: any) => [o.permissionKey as string, o.isGranted as boolean]));
       for (const [key, granted] of overrideMap) {
@@ -149,8 +195,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   private async buildAccessScopes(userId: string, companyId: string) {
     const now = new Date();
-
-    // Query AccessScope records — filter by company, active, and not expired
     const scopes = await this.prisma.accessScope.findMany({
       where: {
         userId,
@@ -192,12 +236,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       include: { role: true },
     });
 
-    // Scope TransportAccessAssignment by companyId AND check expiry
     const now = new Date();
     const activeAssignments = assignments.filter(a => !a.expiresAt || a.expiresAt > now);
     const transportRoles = activeAssignments.map(a => a.role.roleName);
 
-    // Scope UserRoleAssignment by companyId
     const userRoleAssignments = await this.prisma.userRoleAssignment.findMany({
       where: { userId, User: { companyId } } as any,
       include: { role: true } as any,

@@ -1,11 +1,11 @@
 import { AuthorizationService } from '../../common/services/authorization.service';
 import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuditService } from '../../common/audit.service';
 import { ApiKeyService } from './api-key.service';
 import { ApiKeyController } from './api-key.controller';
@@ -24,7 +24,6 @@ import { SecurityEventService } from '../security/security-event.service';
 @Module({
   imports: [
     DatabaseModule,
-    PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
@@ -45,6 +44,7 @@ import { SecurityEventService } from '../security/security-event.service';
   providers: [
     AuthService,
     JwtStrategy,
+    JwtAuthGuard,
     AuditService,
     ApiKeyService,
     PasswordPolicyService,
@@ -58,6 +58,6 @@ import { SecurityEventService } from '../security/security-event.service';
     ScheduledTasksService,
     SecurityEventService,
   ],
-  exports: [AuthService, ApiKeyGuard, PermissionComposerService, ApprovalWorkflowService, ScheduledTasksService, JwtStrategy, JwtModule],
+  exports: [AuthService, ApiKeyGuard, PermissionComposerService, ApprovalWorkflowService, ScheduledTasksService, JwtStrategy, JwtAuthGuard, JwtModule],
 })
 export class AuthModule {}
