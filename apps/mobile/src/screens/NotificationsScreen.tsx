@@ -1,96 +1,75 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-}
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { notificationsApi } from '../services/api';
+import { EmptyState, LoadingState } from '../components/ui';
 
 export default function NotificationsScreen() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    // TODO: Replace with actual API call
-    setNotifications([
-      {
-        id: '1',
-        title: 'Ride Confirmed',
-        message: 'Your morning ride has been confirmed.',
-        timestamp: new Date().toISOString(),
-        read: false,
-      },
-      {
-        id: '2',
-        title: 'Schedule Update',
-        message: 'Your pickup time has been updated to 8:30 AM.',
-        timestamp: new Date(Date.now() - 3600000).toISOString(),
-        read: true,
-      },
-    ]);
+  const loadNotifications = async () => {
+    try {
+      const data = await notificationsApi.list();
+      setNotifications(Array.isArray(data) ? data : (data as any)?.data || []);
+    } catch (error) {
+      console.error('Failed to load notifications:', error);
+    }
     setLoading(false);
-  }, []);
+    setRefreshing(false);
+  };
 
-  const renderItem = ({ item }: { item: Notification }) => (
-    <View style={[styles.notificationItem, !item.read && styles.unread]}>
-      <Text style={styles.title}>{item.title}</Text>
-      <Text style={styles.message}>{item.message}</Text>
-      <Text style={styles.timestamp}>
-        {new Date(item.timestamp).toLocaleString()}
-      </Text>
-    </View>
-  );
+  useEffect(() => { loadNotifications(); }, []);
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563EB" />
-      </View>
-    );
-  }
+  const markAsRead = async (id: string) => {
+    try {
+      await notificationsApi.markAsRead(id);
+      setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: true } : n));
+    } catch (error) {
+      console.error('Failed to mark as read:', error);
+    }
+  };
+
+  if (loading) return <LoadingState message="Loading notifications..." />;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.header}>Notifications</Text>
-      {notifications.length === 0 ? (
-        <View style={styles.centered}>
-          <Text style={styles.emptyText}>No notifications yet</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={notifications}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.list}
-        />
-      )}
-    </SafeAreaView>
+    <View style={styles.container}>
+      <FlatList
+        data={notifications}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ padding: 16 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadNotifications(); }} />}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={[styles.notifCard, !item.isRead && styles.unread]}
+            onPress={() => markAsRead(item.id)}
+          >
+            <View style={styles.notifIcon}>
+              <Ionicons name={item.icon || 'notifications'} size={20} color="#2563EB" />
+            </View>
+            <View style={styles.notifInfo}>
+              <Text style={styles.notifTitle}>{item.title || 'Notification'}</Text>
+              <Text style={styles.notifMessage}>{item.message || item.body || ''}</Text>
+              <Text style={styles.notifTime}>{item.createdAt ? new Date(item.createdAt).toLocaleString() : ''}</Text>
+            </View>
+            {!item.isRead && <View style={styles.unreadDot} />}
+          </TouchableOpacity>
+        )}
+        ListEmptyComponent={<EmptyState title="No notifications" message="You're all caught up!" icon="notifications-outline" />}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: { fontSize: 24, fontWeight: 'bold', padding: 16, color: '#111827' },
-  list: { padding: 16 },
-  notificationItem: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
+  notifCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 12, padding: 16, marginBottom: 8 },
   unread: { borderLeftWidth: 4, borderLeftColor: '#2563EB' },
-  title: { fontSize: 16, fontWeight: '600', color: '#111827' },
-  message: { fontSize: 14, color: '#6B7280', marginTop: 4 },
-  timestamp: { fontSize: 12, color: '#9CA3AF', marginTop: 8 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { fontSize: 16, color: '#9CA3AF' },
+  notifIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+  notifInfo: { flex: 1, marginLeft: 12 },
+  notifTitle: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  notifMessage: { fontSize: 13, color: '#6B7280', marginTop: 2 },
+  notifTime: { fontSize: 11, color: '#9CA3AF', marginTop: 4 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2563EB' },
 });

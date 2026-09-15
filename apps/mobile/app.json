@@ -38,7 +38,9 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
       ]
     },
     "plugins": [
@@ -48,7 +50,16 @@
           "locationAlwaysAndWhenInUsePermission": "Allow NAVIRA to use your location for trip tracking."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-camera",
+      "expo-image-picker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2563EB"
+        }
+      ]
     ]
   }
 }

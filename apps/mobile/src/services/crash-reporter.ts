@@ -1,6 +1,7 @@
 import * as Application from 'expo-application';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 interface CrashReport {
   timestamp: string;
@@ -27,7 +28,7 @@ class CrashReporter {
       platform: Platform.OS,
       appVersion: Constants.expoConfig?.version || '1.0.0',
       deviceModel: Device.modelName || 'Unknown',
-      osVersion: Constants.expoConfig?.sdkVersion || 'Unknown',
+      osVersion: String(Constants.expoConfig?.sdkVersion || 'Unknown'),
     };
   }
 
@@ -80,5 +81,4 @@ class CrashReporter {
   }
 }
 
-const { Platform } = require('react-native');
 export const crashReporter = new CrashReporter();

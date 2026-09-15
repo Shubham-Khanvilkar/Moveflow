@@ -63,7 +63,7 @@ async function clearAuth(): Promise<void> {
 export { getStoredAuth, getStoredRefreshToken, saveAuth, clearAuth };
 export type { AuthTokens, UserData };
 
-async function apiRequest<T = any>(
+export async function apiRequest<T = any>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
