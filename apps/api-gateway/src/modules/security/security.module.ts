@@ -7,13 +7,14 @@ import { PrivacySecurityService } from './privacy-security.service';
 import { SSOService } from './sso.service';
 import { DataRetentionService } from './data-retention.service';
 import { DSARService } from './dsar.service';
+import { SecurityEventService } from './security-event.service';
 import { AuditService } from '../../common/audit.service';
 import { DatabaseModule } from '../../common/database.module';
 
 @Module({
   imports: [DatabaseModule],
-  providers: [DeviceBindingService, MFAService, PrivacySecurityService, SSOService, DataRetentionService, DSARService, AuditService],
+  providers: [DeviceBindingService, MFAService, PrivacySecurityService, SSOService, DataRetentionService, DSARService, SecurityEventService, AuditService],
   controllers: [DeviceBindingController, MFAController],
-  exports: [DeviceBindingService, MFAService, PrivacySecurityService, SSOService, DataRetentionService, DSARService],
+  exports: [DeviceBindingService, MFAService, PrivacySecurityService, SSOService, DataRetentionService, DSARService, SecurityEventService],
 })
 export class SecurityModule {}

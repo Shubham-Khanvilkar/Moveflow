@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma.service';
 import { AuditService } from '../../common/audit.service';
 import { PasswordPolicyService } from './password-policy.service';
+import { SecurityEventService } from '../security/security-event.service';
 import { getSupabaseClientOptional } from '../../lib/supabase';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -60,6 +61,7 @@ export class AuthService {
     private configService: ConfigService,
     private audit: AuditService,
     private readonly passwordPolicy: PasswordPolicyService,
+    private readonly securityEvents: SecurityEventService,
   ) {
     // Supabase is optional: when env vars are absent we authenticate locally
     // against User.passwordHash (bcrypt) and issue our own JWTs.
@@ -168,7 +170,9 @@ export class AuthService {
     return `${mins} minute${mins === 1 ? '' : 's'}`;
   }
 
-  async login(email: string, password: string, companyCode?: string) {
+  async login(email: string, password: string, companyCode?: string, ipAddress?: string, userAgent?: string) {
+    const loginMeta = { ipAddress, userAgent, email };
+
     // Look up user in our database first (source of truth for business context)
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -180,9 +184,31 @@ export class AuthService {
       },
     });
 
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) {
+      await this.securityEvents.logEvent({
+        eventCode: 'FAILED_LOGIN_USER_NOT_FOUND',
+        email,
+        ipAddress,
+        userAgent,
+        riskLevel: 'LOW',
+        description: `Login attempt for non-existent email: ${email}`,
+        metadata: loginMeta,
+      });
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     if (user.lockedUntil && user.lockedUntil > new Date()) {
+      await this.securityEvents.logEvent({
+        eventCode: 'FAILED_LOGIN_ACCOUNT_LOCKED',
+        email,
+        userId: user.id,
+        ipAddress,
+        userAgent,
+        companyId: user.companyId,
+        riskLevel: 'HIGH',
+        description: `Login attempt on locked account: ${email}`,
+        metadata: { ...loginMeta, lockedUntil: user.lockedUntil.toISOString() },
+      });
       throw new UnauthorizedException(
         `Account is temporarily locked. Try again after ${this.formatRemaining(user.lockedUntil)}`,
       );
@@ -200,6 +226,38 @@ export class AuthService {
       const ok = !!user.passwordHash && (await bcrypt.compare(password, user.passwordHash));
       if (!ok) {
         await this.recordFailedAttempt(user.id);
+
+        const failedCount = (user.failedLoginCount || 0) + 1;
+        const isBruteForce = failedCount >= MAX_FAILED_ATTEMPTS;
+
+        await this.securityEvents.logEvent({
+          eventCode: isBruteForce ? 'BRUTE_FORCE_DETECTED' : 'FAILED_LOGIN_INVALID_CREDENTIALS',
+          email,
+          userId: user.id,
+          ipAddress,
+          userAgent,
+          companyId: user.companyId,
+          riskLevel: isBruteForce ? 'CRITICAL' : 'MEDIUM',
+          description: isBruteForce
+            ? `Brute force detected: ${failedCount} failed attempts from IP ${ipAddress}`
+            : `Failed login attempt (${failedCount}/${MAX_FAILED_ATTEMPTS}) for: ${email}`,
+          metadata: { ...loginMeta, failedCount, maxAttempts: MAX_FAILED_ATTEMPTS },
+        });
+
+        // Also check IP-level brute force
+        if (ipAddress) {
+          const ipBruteForce = await this.securityEvents.checkBruteForce(ipAddress);
+          if (ipBruteForce) {
+            await this.securityEvents.logEvent({
+              eventCode: 'BRUTE_FORCE_DETECTED',
+              ipAddress,
+              riskLevel: 'CRITICAL',
+              description: `IP-level brute force detected from ${ipAddress}`,
+              metadata: { ...loginMeta, detectedAtUser: email },
+            });
+          }
+        }
+
         throw new UnauthorizedException('Invalid credentials');
       }
       authenticated = true;
@@ -229,28 +287,43 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    // Fetch roles, permissions, and access scopes
-    const { roles, permissions, accessScopes } = await this.buildUserContext(user.id, activeMembership.companyId);
+    // Log successful login
+    await this.securityEvents.logEvent({
+      eventCode: 'SUCCESSFUL_LOGIN',
+      email,
+      userId: user.id,
+      ipAddress,
+      userAgent,
+      companyId: activeMembership.companyId,
+      riskLevel: 'LOW',
+      description: `Successful login: ${email}`,
+      metadata: loginMeta,
+    });
 
-    // Tokens: always use locally-signed JWT (Supabase is only used for password verification)
-    const local = await this.issueLocalTokens(user, activeMembership);
+    // Fetch roles, permissions, access scopes AND issue tokens in parallel
+    const [userContext, local] = await Promise.all([
+      this.buildUserContext(user.id, activeMembership.companyId),
+      this.issueLocalTokens(user, activeMembership),
+    ]);
+    const { roles, permissions, accessScopes } = userContext;
     const accessToken = local.accessToken;
     const refreshToken = local.refreshToken;
 
-    // Store session in our DB for tracking
-    await this.prisma.session.create({
-      data: {
-        userId: user.id,
-        token: accessToken,
-        refreshToken: refreshToken,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      },
-    });
-
-    await this.audit.log({
-      companyId: activeMembership.companyId, userId: user.id, action: 'LOGIN', entity: 'Session',
-      newValue: { email: user.email },
-    });
+    // Store session and audit log in parallel
+    await Promise.all([
+      this.prisma.session.create({
+        data: {
+          userId: user.id,
+          token: accessToken,
+          refreshToken: refreshToken,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      }),
+      this.audit.log({
+        companyId: activeMembership.companyId, userId: user.id, action: 'LOGIN', entity: 'Session',
+        newValue: { email: user.email },
+      }),
+    ]);
 
     return {
       access_token: accessToken,
@@ -453,12 +526,30 @@ export class AuthService {
   }
 
   private async buildUserContext(userId: string, companyId: string) {
-    // Fetch transport access role assignments (legacy system)
-    const assignments = await this.prisma.transportAccessAssignment.findMany({
-      where: { companyId, userId, isActive: true },
-      include: { role: true },
-    });
+    // Run independent queries in parallel to reduce login latency
+    const [assignments, userRoleAssignments, membership, scopes] = await Promise.all([
+      // Legacy transport access role assignments
+      this.prisma.transportAccessAssignment.findMany({
+        where: { companyId, userId, isActive: true },
+        include: { role: true },
+      }),
+      // New role assignment system
+      this.prisma.userRoleAssignment.findMany({
+        where: { userId },
+        include: { role: true } as any,
+      }),
+      // Company membership
+      this.prisma.companyMembership.findFirst({
+        where: { userId, companyId, status: 'ACTIVE' },
+      }),
+      // Access scopes
+      this.prisma.accessScope.findMany({
+        where: { companyId, userId, isActive: true },
+        include: { site: true, lob: true, process: true, shift: true },
+      }),
+    ]);
 
+    // Build roles from legacy system
     const transportRoles = assignments.map(a => ({
       id: a.role.id,
       name: a.role.roleName,
@@ -466,12 +557,7 @@ export class AuthService {
       hierarchyLevel: a.role.hierarchyLevel,
     }));
 
-    // Fetch UserRoleAssignment records (new system)
-    const userRoleAssignments = await this.prisma.userRoleAssignment.findMany({
-      where: { userId },
-      include: { role: true } as any,
-    });
-
+    // Build roles from new system
     const userRoles = (userRoleAssignments as any[]).map(ura => ({
       id: ura.role.id,
       name: ura.role.name,
@@ -486,10 +572,7 @@ export class AuthService {
       .map(r => ({ ...r, name: normalizeRole(r.name) }))
       .filter(r => { if (seen.has(r.name)) return false; seen.add(r.name); return true; });
 
-    // Also get membership role
-    const membership = await this.prisma.companyMembership.findFirst({
-      where: { userId, companyId, status: 'ACTIVE' },
-    });
+    // Add membership role if not already present
     if (membership) {
       const canonicalMembershipRole = normalizeRole(membership.role);
       if (!roles.find(r => r.name === canonicalMembershipRole)) {
@@ -501,30 +584,31 @@ export class AuthService {
     const roleIds = assignments.map(a => a.roleId);
     const userRoleIds = userRoleAssignments.map(ura => ura.roleId);
 
-    // Fetch permissions from BOTH role systems
-    const rolePermissions = roleIds.length > 0
-      ? await this.prisma.rolePermissionConfig.findMany({
-          where: { roleId: { in: roleIds }, enabled: true },
-          include: { permission: true } as any,
-        })
-      : [];
+    // Fetch permissions from BOTH role systems in parallel
+    const [rolePermissions, globalRolePerms] = await Promise.all([
+      roleIds.length > 0
+        ? this.prisma.rolePermissionConfig.findMany({
+            where: { roleId: { in: roleIds }, enabled: true },
+            include: { permission: true } as any,
+          })
+        : Promise.resolve([]),
+      userRoleIds.length > 0
+        ? this.prisma.rolePermission.findMany({
+            where: { roleId: { in: userRoleIds } },
+            include: { permission: true } as any,
+          })
+        : Promise.resolve([]),
+    ]);
 
     const permissionSet = new Set<string>();
     for (const rp of rolePermissions as any[]) {
       permissionSet.add(`${rp.permission.module}:${rp.permission.action}`);
     }
-
-    const globalRolePerms = userRoleIds.length > 0
-      ? await this.prisma.rolePermission.findMany({
-          where: { roleId: { in: userRoleIds } },
-          include: { permission: true } as any,
-        })
-      : [];
     for (const rp of globalRolePerms as any[]) {
       permissionSet.add(`${rp.permission.module}:${rp.permission.action}`);
     }
 
-    // Also merge legacy boolean permissions from TransportAccessRole
+    // Merge legacy boolean permissions from TransportAccessRole
     for (const a of assignments) {
       if (a.role.canManageVendors) permissionSet.add('vendors:manage');
       if (a.role.canManageDrivers) permissionSet.add('drivers:manage');
@@ -541,12 +625,6 @@ export class AuthService {
       if (a.role.canManageSubAdmins) permissionSet.add('admin:manage_subadmins');
       if (a.role.canManageAccessRoles) permissionSet.add('admin:manage_access_roles');
     }
-
-    // Fetch access scopes
-    const scopes = await this.prisma.accessScope.findMany({
-      where: { companyId, userId, isActive: true },
-      include: { site: true, lob: true, process: true, shift: true },
-    });
 
     const accessScopes = scopes.map(s => ({
       siteId: s.siteId, siteName: s.site?.siteName,

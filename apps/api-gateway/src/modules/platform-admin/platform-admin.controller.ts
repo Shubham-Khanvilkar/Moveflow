@@ -7,6 +7,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { OwnerOnly } from '../../common/decorators/owner-only.decorator';
 import { PlatformAdminService } from './platform-admin.service';
 import { LocationChangeService } from './location-change.service';
+import { SecurityEventService } from '../security/security-event.service';
 
 @Controller('platform')
 @UseGuards(JwtAuthGuard, AccessScopeGuard, RolesGuard, OwnerOnlyGuard)
@@ -15,6 +16,7 @@ export class PlatformAdminController {
   constructor(
     private readonly svc: PlatformAdminService,
     private readonly locationChangeSvc: LocationChangeService,
+    private readonly securityEventSvc: SecurityEventService,
   ) {}
 
   @Get('companies')
@@ -225,5 +227,32 @@ export class PlatformAdminController {
       updatedBy: req.user?.sub || 'system',
       reason: body.reason,
     });
+  }
+
+  // ─── SECURITY EVENTS ─────────────────────────────────────
+  @Get('security/events')
+  getSecurityEvents(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('eventCode') eventCode?: string,
+    @Query('riskLevel') riskLevel?: string,
+    @Query('ipAddress') ipAddress?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.securityEventSvc.getSecurityEvents({
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+      eventCode,
+      riskLevel,
+      ipAddress,
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+    });
+  }
+
+  @Get('security/summary')
+  getSecuritySummary() {
+    return this.securityEventSvc.getSecuritySummary();
   }
 }

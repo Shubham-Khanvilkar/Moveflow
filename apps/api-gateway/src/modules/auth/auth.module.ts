@@ -1,5 +1,5 @@
 import { AuthorizationService } from '../../common/services/authorization.service';
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -19,6 +19,7 @@ import { PermissionComposerService } from './permission-composer.service';
 import { ApprovalWorkflowService } from './approval-workflow.service';
 import { ScheduledTasksService } from '../../common/scheduled-tasks.service';
 import { SignupController } from './signup.controller';
+import { SecurityEventService } from '../security/security-event.service';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { SignupController } from './signup.controller';
     PermissionComposerService,
     ApprovalWorkflowService,
     ScheduledTasksService,
+    SecurityEventService,
   ],
   exports: [AuthService, ApiKeyGuard, PermissionComposerService, ApprovalWorkflowService, ScheduledTasksService, JwtStrategy, JwtModule],
 })

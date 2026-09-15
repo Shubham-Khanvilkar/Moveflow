@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AuthorizationService } from '../../common/services/authorization.service';
@@ -26,8 +26,10 @@ export class AuthController {
 
   @Post('login')
   @Throttle(10, 60)
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto.email, loginDto.password, loginDto.companyCode);
+  async login(@Body() loginDto: LoginDto, @Req() req: any) {
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'] || '';
+    return this.authService.login(loginDto.email, loginDto.password, loginDto.companyCode, ipAddress, userAgent);
   }
 
   @Post('refresh')
