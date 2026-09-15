@@ -13,17 +13,13 @@ export class ApiError extends Error {
   }
 }
 
-function withTimeout(signal: AbortSignal | undefined, ms: number): { controller: AbortController; timeoutId: ReturnType<typeof setTimeout> } {
+function withTimeout(signal: AbortSignal | null | undefined, ms: number): { controller: AbortController; timeoutId: ReturnType<typeof setTimeout> } {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), ms);
-  const merged = signal
-    ? new AbortController()
-    : controller;
   if (signal) {
-    signal.addEventListener('abort', () => merged.abort(), { once: true });
-    controller.addEventListener('abort', () => merged.abort(), { once: true });
+    signal.addEventListener('abort', () => controller.abort(), { once: true });
   }
-  return { controller: merged, timeoutId };
+  return { controller, timeoutId };
 }
 
 export async function apiRequest<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {

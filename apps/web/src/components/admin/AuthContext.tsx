@@ -108,64 +108,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Fetch full user context from /me endpoint
   const fetchMe = useCallback(async (accessToken: string) => {
     setResolving(true);
-    let lastErr: any = null;
-    for (let attempt = 0; attempt <= 2; attempt++) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-        const res = await fetch(`${API_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        if (!res.ok) {
-          throw new Error(`Failed to fetch user context: ${res.status}`);
-        }
-        const data = await res.json();
-        const me = data.data || data;
+    try {
+      let lastErr: any = null;
+      for (let attempt = 0; attempt <= 2; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
+          const res = await fetch(`${API_URL}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          if (!res.ok) {
+            throw new Error(`Failed to fetch user context: ${res.status}`);
+          }
+          const data = await res.json();
+          const me = data.data || data;
 
-        const fullUser: User = {
-          id: me.id,
-          email: me.email,
-          name: me.name,
-          phone: me.phone,
-          employeeId: me.employeeId,
-          status: me.status,
-          transportEligibility: me.transportEligibility,
-          role: me.activeRole || me.roles?.[0] || 'EMPLOYEE',
-          activeRole: me.activeRole || me.roles?.[0] || 'EMPLOYEE',
-          companyId: me.company?.id || '',
-          companyName: me.company?.name || '',
-          company: me.company,
-          roles: me.roles || [],
-          permissions: me.permissions || {},
-          scope: me.scope || { sites: [], lobs: [], processes: [], shifts: [] },
-          portals: me.portals || [],
-          activePortal: me.activePortal || null,
-          navigation: me.navigation || [],
-          dashboard: me.dashboard || null,
-          dataVisibility: me.dataVisibility || { scope: 'self', dataClassification: 'INTERNAL' },
-        };
+          const fullUser: User = {
+            id: me.id,
+            email: me.email,
+            name: me.name,
+            phone: me.phone,
+            employeeId: me.employeeId,
+            status: me.status,
+            transportEligibility: me.transportEligibility,
+            role: me.activeRole || me.roles?.[0] || 'EMPLOYEE',
+            activeRole: me.activeRole || me.roles?.[0] || 'EMPLOYEE',
+            companyId: me.company?.id || '',
+            companyName: me.company?.name || '',
+            company: me.company,
+            roles: me.roles || [],
+            permissions: me.permissions || {},
+            scope: me.scope || { sites: [], lobs: [], processes: [], shifts: [] },
+            portals: me.portals || [],
+            activePortal: me.activePortal || null,
+            navigation: me.navigation || [],
+            dashboard: me.dashboard || null,
+            dataVisibility: me.dataVisibility || { scope: 'self', dataClassification: 'INTERNAL' },
+          };
 
-        setUser(fullUser);
-        setPortals(me.portals || []);
-        setDefaultPortal(me.activePortal || null);
-        setPortalDashboards(me.portalDashboards || {});
-        setScope(me.scope || { sites: [], lobs: [], processes: [], shifts: [] });
-        setNavigation(me.navigation || []);
-        if (me.activePortal) {
-          setActivePortal(me.activePortal);
+          setUser(fullUser);
+          setPortals(me.portals || []);
+          setDefaultPortal(me.activePortal || null);
+          setPortalDashboards(me.portalDashboards || {});
+          setScope(me.scope || { sites: [], lobs: [], processes: [], shifts: [] });
+          setNavigation(me.navigation || []);
+          if (me.activePortal) {
+            setActivePortal(me.activePortal);
+          }
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         }
-        lastErr = null;
-        break;
-      } catch (err) {
-        lastErr = err;
-        if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
       }
-    }
-    if (lastErr) {
-      console.error('Failed to fetch user context:', lastErr);
-      // Don't clear user on fetch failure - keep stale data
+      if (lastErr) {
+        console.error('Failed to fetch user context:', lastErr);
+      }
     } finally {
       setResolving(false);
     }
@@ -222,6 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      if (!accessToken) return false;
       setToken(accessToken);
       localStorage.setItem('token', accessToken);
       await fetchMe(accessToken);
