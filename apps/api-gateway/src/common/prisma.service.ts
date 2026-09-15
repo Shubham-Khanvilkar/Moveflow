@@ -5,6 +5,8 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
   private connected = false;
+  private lastError: string | null = null;
+  private errorCount = 0;
 
   async onModuleInit() {
     try {
@@ -32,5 +34,31 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
    */
   isConnected(): boolean {
     return this.connected;
+  }
+
+  /**
+   * Track transient DB errors for health reporting.
+   * Call this when a Prisma query fails with a connection/pool error.
+   */
+  trackError(error: any): void {
+    const msg = error?.message || String(error);
+    if (msg.includes('too many clients') || msg.includes('connection pool') || msg.includes('ECONNREFUSED')) {
+      this.errorCount++;
+      this.lastError = msg.substring(0, 200);
+      if (this.errorCount % 10 === 1) {
+        this.logger.warn(`DB pool errors: ${this.errorCount} total, last: ${this.lastError}`);
+      }
+    }
+  }
+
+  /**
+   * Reset error counter (call after successful queries).
+   */
+  clearError(): void {
+    if (this.errorCount > 0) {
+      this.logger.log(`DB pool errors cleared (was ${this.errorCount})`);
+    }
+    this.errorCount = 0;
+    this.lastError = null;
   }
 }

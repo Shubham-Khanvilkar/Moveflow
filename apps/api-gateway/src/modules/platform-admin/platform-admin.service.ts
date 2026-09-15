@@ -220,7 +220,7 @@ export class PlatformAdminService {
 
   // ─── ROLE CATALOGUE ──────────────────────────────────────
   async listRoles() {
-    return this.prisma.role.findMany({ include: { _count: { select: { permissions: true, assignments: true } } } as any, orderBy: { securityDomain: "asc" } });
+    return this.prisma.role.findMany({ include: { _count: { select: { RolePermission: true, UserRoleAssignment: true } } }, orderBy: { securityDomain: "asc" } });
   }
 
   async listPermissions() {
@@ -396,7 +396,7 @@ export class PlatformAdminService {
     let availableDrivers = 0;
     try {
       availableDrivers = await this.prisma.driverProfile.count({
-        where: { status: 'AVAILABLE' as any },
+        where: { status: 'ACTIVE', availabilityStatus: 'AVAILABLE' },
       });
     } catch(e) { this.logger.error('Failed to query available drivers', (e as Error).message); }
 
@@ -419,7 +419,7 @@ export class PlatformAdminService {
     let openIncidents = 0;
     try {
       openIncidents = await this.prisma.incident.count({
-        where: { status: { in: ['OPEN', 'IN_PROGRESS'] as any[] } },
+        where: { status: { in: ['REPORTED', 'ASSIGNED', 'INVESTIGATING'] } },
       });
     } catch(e) { this.logger.error('Failed to query open incidents', (e as Error).message); }
 

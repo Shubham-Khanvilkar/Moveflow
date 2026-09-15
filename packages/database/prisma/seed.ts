@@ -14,7 +14,7 @@ const supabase: SupabaseClient | null =
 
 const DEMO_PASSWORD = 'Admin@2026';
 
-async function createAuthUser(email: string, role: string, companyId: string, name: string): Promise<string> {
+async function createAuthUser(email: string, role: string, companyId: string | null, name: string): Promise<string> {
   if (!supabase) {
     // Fallback: use a deterministic UUID-like id when Supabase is absent
     return `user_${email.replace(/[^a-z0-9]/gi, '_')}`;
@@ -24,7 +24,7 @@ async function createAuthUser(email: string, role: string, companyId: string, na
       email,
       password: DEMO_PASSWORD,
       email_confirm: true,
-      app_metadata: { companyId, role },
+      app_metadata: { companyId: companyId || 'platform', role },
       user_metadata: { name },
     });
     if (error) {
@@ -202,6 +202,52 @@ async function main() {
     await prisma.rolePermission.create({ data: { roleId: 'role_manager', permissionId: p.code.replace(':', '_') } });
   }
   console.log('✅ Roles:', roleConfigs.length);
+
+  // ─── PLATFORM / NAVIRA COMPANY + INTERNAL USERS ────────────
+  console.log('🔗 Seeding Platform Internal users...');
+  const naviraCompany = await prisma.company.create({
+    data: {
+      id: 'comp_navira_001',
+      name: 'Navira Platform',
+      code: 'NAVIRA001',
+      slug: 'navira-platform',
+      domain: 'navira.com',
+      logo: 'https://ui-avatars.com/api/?name=Navira&background=7c3aed&color=fff',
+      primaryColor: '#7C3AED',
+      status: 'ACTIVE',
+      country: 'India',
+      city: 'Mumbai',
+    },
+  });
+  console.log('✅ Navira Platform Company:', naviraCompany.name);
+
+  const PLATFORM_PASSWORD = 'Navira@2026';
+  const platformUsers = [
+    { email: 'owner@navira.com',          name: 'Navira Owner',           roleId: 'role_navira_owner',        phone: '+919000000001' },
+    { email: 'admin@navira.com',          name: 'Move-In Admin',          roleId: 'role_move_in_admin',       phone: '+919000000002' },
+    { email: 'superadmin@navira.com',     name: 'Platform Super Admin',   roleId: 'role_superadmin',          phone: '+919000000003' },
+    { email: 'finance@navira.com',        name: 'Finance Team',           roleId: 'role_finance_team',        phone: '+919000000004' },
+    { email: 'pm@navira.com',             name: 'Project Manager',        roleId: 'role_project_manager',     phone: '+919000000005' },
+    { email: 'coordinator@navira.com',    name: 'Project Coordinator',    roleId: 'role_project_coordinator', phone: '+919000000006' },
+    { email: 'compliance@navira.com',     name: 'Platform Compliance',    roleId: 'role_platform_compliance', phone: '+919000000007' },
+    { email: 'security@navira.com',       name: 'Security Administrator', roleId: 'role_security_administrator', phone: '+919000000008' },
+    { email: 'support@navira.com',        name: 'Support Engineer',       roleId: 'role_support_engineer',    phone: '+919000000009' },
+    { email: 'auditor@navira.com',        name: 'Platform Auditor',       roleId: 'role_platform_auditor',    phone: '+919000000010' },
+  ];
+  for (const pu of platformUsers) {
+    try {
+      const puAuthId = await createAuthUser(pu.email, 'SUPER_ADMIN', naviraCompany.id, pu.name);
+      await prisma.user.create({
+        data: { id: puAuthId, companyId: naviraCompany.id, email: pu.email, name: pu.name, passwordHash: supabase ? 'managed-by-supabase' : await bcrypt.hash(PLATFORM_PASSWORD, 12), phone: pu.phone, status: 'ACTIVE' },
+      });
+      await prisma.userRoleAssignment.create({ data: { userId: puAuthId, roleId: pu.roleId } });
+      await prisma.companyMembership.create({ data: { userId: puAuthId, companyId: naviraCompany.id, role: 'SUPER_ADMIN' as any, status: 'ACTIVE' } });
+      console.log(`  ✅ ${pu.email} / ${PLATFORM_PASSWORD} → ${pu.roleId}`);
+    } catch (e: any) {
+      console.log(`  ⏭️  ${pu.email} already exists, skipping`);
+    }
+  }
+  console.log('✅ Platform Internal Users: 10');
 
   // 10. Users — create in Supabase Auth (or local bcrypt when Supabase absent)
   console.log(supabase ? '🔗 Using Supabase Auth for user creation' : '⚠️  No Supabase — using local bcrypt fallback');
@@ -431,6 +477,9 @@ async function main() {
     { id: 'user_vendor_admin', email: 'vendor.admin@acme.com', name: 'Vendor Admin', role: 'VENDOR_ADMIN', roleId: 'role_vendor_admin', phone: '+919876543230' },
     { id: 'user_driver2', email: 'driver2@acme.com', name: 'Driver Kumar', role: 'DRIVER', roleId: 'role_driver', phone: '+919876543231' },
     { id: 'user_driver3', email: 'driver3@acme.com', name: 'Driver Singh', role: 'DRIVER', roleId: 'role_driver', phone: '+919876543232' },
+    // Missing customer/partner roles
+    { id: 'user_transport_sub_admin', email: 'subadmin@acme.com', name: 'Transport Sub-Admin', role: 'TRANSPORT_SUB_ADMIN', roleId: 'role_transport_sub_admin', phone: '+919876543233' },
+    { id: 'user_vendor_dispatcher', email: 'vendor.dispatcher@acme.com', name: 'Vendor Dispatcher', role: 'VENDOR_DISPATCHER', roleId: 'role_vendor_dispatcher', phone: '+919876543234' },
   ];
 
   for (const rp of roleProfiles) {
@@ -789,16 +838,40 @@ async function main() {
 
   console.log('\n🎉 DATABASE SEEDED SUCCESSFULLY!');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('  Company:  Acme Enterprise (ACME001)');
-  console.log('  Admin:    admin@acme.com / Admin@2026');
-  console.log('  Manager:  manager@acme.com / Admin@2026');
-  console.log('  Employee: priya@acme.com / Admin@2026');
-  console.log('  Driver:   driver1@acme.com / Admin@2026');
+  console.log('');
+  console.log('  ─── Navira Platform (10 users) ───');
+  console.log('  Company: Navira Platform (NAVIRA001)');
+  console.log('  Password: Navira@2026');
+  console.log('  Owner:    owner@navira.com');
+  console.log('  Admin:    admin@navira.com');
+  console.log('  Super:    superadmin@navira.com');
+  console.log('  Finance:  finance@navira.com');
+  console.log('  PM:       pm@navira.com');
+  console.log('  Coord:    coordinator@navira.com');
+  console.log('  Comply:   compliance@navira.com');
+  console.log('  Security: security@navira.com');
+  console.log('  Support:  support@navira.com');
+  console.log('  Auditor:  auditor@navira.com');
+  console.log('');
+  console.log('  ─── Acme Enterprise (27 users) ───');
+  console.log('  Company: Acme Enterprise (ACME001)');
+  console.log('  Password: Admin@2026');
+  console.log('  Admin:     admin@acme.com');
+  console.log('  Manager:   manager@acme.com');
+  console.log('  SubAdmin:  subadmin@acme.com');
+  console.log('  Employee:  priya@acme.com');
+  console.log('  Driver:    driver1@acme.com');
+  console.log('  Vendor:    vendor.admin@acme.com');
+  console.log('  Dispatch:  vendor.dispatcher@acme.com');
+  console.log('  Guard:     guard@acme.com');
+  console.log('');
+  console.log('  ─── Infrastructure ───');
   console.log('  Sites:    Mumbai, Pune, Bengaluru');
   console.log('  Vehicles: 3');
   console.log('  Routes:   2');
-  console.log('  V6:      13 role profiles + vendor + feature flags');
-  console.log('  SaaS:    16 transport roles, permissions, hierarchy, subscription plans');
+  console.log('  V6:       15 role profiles + vendor + feature flags');
+  console.log('  SaaS:     25 roles, permissions, hierarchy, subscription plans');
+  console.log('  Total:    37 seeded users (10 platform + 27 customer/partner)');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 
